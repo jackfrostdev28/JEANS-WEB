@@ -1,9 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
+import { Plus } from 'lucide-react';
 import api from '../api';
+import { AuthContext } from '../AuthContext';
 
 const Products = () => {
+  const { user } = useContext(AuthContext);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [variantForm, setVariantForm] = useState({ size: '', barcode: '' });
+  const [variantError, setVariantError] = useState('');
+  const [variantLoading, setVariantLoading] = useState(false);
+
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     fetchProducts();
@@ -17,6 +26,36 @@ const Products = () => {
     } catch (err) {
       console.error(err);
       setLoading(false);
+    }
+  };
+
+  const openAddVariantModal = (product) => {
+    setSelectedProduct(product);
+    setVariantForm({ size: '', barcode: '' });
+    setVariantError('');
+  };
+
+  const closeAddVariantModal = () => {
+    setSelectedProduct(null);
+    setVariantForm({ size: '', barcode: '' });
+    setVariantError('');
+  };
+
+  const handleAddVariant = async (e) => {
+    e.preventDefault();
+    if (!selectedProduct) return;
+
+    setVariantLoading(true);
+    setVariantError('');
+
+    try {
+      await api.post(`/products/${selectedProduct.id}/variants`, variantForm);
+      await fetchProducts();
+      closeAddVariantModal();
+    } catch (err) {
+      setVariantError(err.response?.data?.error || 'เกิดข้อผิดพลาดในการเพิ่มไซส์');
+    } finally {
+      setVariantLoading(false);
     }
   };
 
@@ -38,6 +77,7 @@ const Products = () => {
                 <th>ชื่อสินค้า</th>
                 <th>ราคา</th>
                 <th>ไซส์ & คงเหลือ</th>
+                {isAdmin && <th>จัดการ</th>}
               </tr>
             </thead>
             <tbody>
@@ -68,18 +108,85 @@ const Products = () => {
                         รวมทั้งหมด: {totalStock}
                       </div>
                     </td>
+                    {isAdmin && (
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                          onClick={() => openAddVariantModal(product)}
+                        >
+                          <Plus size={16} /> เพิ่มไซส์
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {products.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="text-center text-muted">ไม่พบข้อมูลสินค้า</td>
+                  <td colSpan={isAdmin ? 6 : 5} className="text-center text-muted">ไม่พบข้อมูลสินค้า</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {selectedProduct && (
+        <div className="modal-overlay">
+          <div className="glass-panel modal-content" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2>เพิ่มไซส์ให้รุ่นเดิม</h2>
+              <button type="button" className="btn btn-outline" onClick={closeAddVariantModal}>ปิด</button>
+            </div>
+
+            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem' }}>
+              <p><strong>รหัส (Serial):</strong> {selectedProduct.serial}</p>
+              <p><strong>ชื่อสินค้า:</strong> {selectedProduct.name}</p>
+              <p style={{ marginBottom: 0 }}><strong>ไซส์ที่มีอยู่:</strong> {selectedProduct.variants.map(v => v.size).join(', ') || '-'}</p>
+            </div>
+
+            {variantError && (
+              <div className="badge badge-danger mb-4" style={{ display: 'block', padding: '1rem' }}>{variantError}</div>
+            )}
+
+            <form onSubmit={handleAddVariant}>
+              <div className="input-group">
+                <label className="input-label">ไซส์</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="เช่น XL, 32, 34"
+                  value={variantForm.size}
+                  onChange={(e) => setVariantForm({ ...variantForm, size: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">รหัสบาร์โค้ด (Barcode / QR)</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="สแกนหรือพิมพ์บาร์โค้ด..."
+                  value={variantForm.barcode}
+                  onChange={(e) => setVariantForm({ ...variantForm, barcode: e.target.value })}
+                  required
+                />
+              </div>
+
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+                สต๊อกเริ่มต้นที่ 0 — หลังเพิ่มไซส์แล้ว ไปหน้าสแกนสินค้าเพื่อรับเข้าสต๊อก
+              </p>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={variantLoading}>
+                {variantLoading ? 'กำลังบันทึก...' : 'บันทึกไซส์ใหม่'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

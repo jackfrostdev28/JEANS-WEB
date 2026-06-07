@@ -127,6 +127,53 @@ app.post('/api/products', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/products/:id/variants', authenticateToken, requireAdmin, async (req, res) => {
+  const productId = parseInt(req.params.id, 10);
+  const { size, barcode } = req.body;
+
+  if (!size?.trim() || !barcode?.trim()) {
+    return res.status(400).json({ error: 'กรุณากรอกไซส์และบาร์โค้ด' });
+  }
+
+  const normalizedSize = size.trim();
+  const normalizedBarcode = barcode.trim();
+
+  try {
+    const productRes = await db.query('SELECT id, serial, name FROM products WHERE id = $1', [productId]);
+    if (productRes.rows.length === 0) {
+      return res.status(404).json({ error: 'ไม่พบสินค้า' });
+    }
+
+    const existingSize = await db.query(
+      'SELECT id FROM product_variants WHERE product_id = $1 AND LOWER(size) = LOWER($2)',
+      [productId, normalizedSize]
+    );
+    if (existingSize.rows.length > 0) {
+      return res.status(400).json({ error: `ไซส์ ${normalizedSize} มีอยู่ในรุ่นนี้แล้ว` });
+    }
+
+    const existingBarcode = await db.query(
+      'SELECT id FROM product_variants WHERE barcode = $1',
+      [normalizedBarcode]
+    );
+    if (existingBarcode.rows.length > 0) {
+      return res.status(400).json({ error: 'บาร์โค้ดนี้ถูกใช้งานแล้ว' });
+    }
+
+    const variantRes = await db.query(
+      'INSERT INTO product_variants (product_id, size, barcode, stock_quantity) VALUES ($1, $2, $3, 0) RETURNING *',
+      [productId, normalizedSize, normalizedBarcode]
+    );
+
+    res.json({
+      product: productRes.rows[0],
+      variant: variantRes.rows[0],
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/products/:id/upload', authenticateToken, requireAdmin, upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No image file provided" });
   const imageUrl = `/uploads/${req.file.filename}`;
