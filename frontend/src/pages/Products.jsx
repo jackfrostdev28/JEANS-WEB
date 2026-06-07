@@ -1,9 +1,11 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Pencil, Trash2, Settings2 } from 'lucide-react';
 import api from '../api';
 import { AuthContext } from '../AuthContext';
 
 const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+
+const isInStock = (variant) => Number(variant.stock_quantity) > 0;
 
 const groupVariantsBySize = (variants) => {
   const groups = new Map();
@@ -12,11 +14,11 @@ const groupVariantsBySize = (variants) => {
     const displaySize = variant.size.trim();
     const sizeKey = displaySize.toLowerCase();
     if (!groups.has(sizeKey)) {
-      groups.set(sizeKey, { size: displaySize, variants: [], totalStock: 0 });
+      groups.set(sizeKey, { size: displaySize, variants: [], inStock: 0 });
     }
     const group = groups.get(sizeKey);
     group.variants.push(variant);
-    group.totalStock += Number(variant.stock_quantity) || 0;
+    if (isInStock(variant)) group.inStock += 1;
   });
 
   return Array.from(groups.values()).sort((a, b) => {
@@ -31,7 +33,7 @@ const groupVariantsBySize = (variants) => {
 
 const getProductSummary = (variants) => {
   const groups = groupVariantsBySize(variants);
-  const totalStock = variants.reduce((sum, v) => sum + (Number(v.stock_quantity) || 0), 0);
+  const totalStock = variants.filter(isInStock).length;
   return {
     totalStock,
     sizeCount: groups.length,
@@ -46,12 +48,21 @@ const getImageUrl = (imageUrl) => {
   return `${base}${imageUrl}`;
 };
 
+const StockBadge = ({ inStock }) => (
+  <span className={`stock-badge ${inStock ? 'stock-badge-in' : 'stock-badge-out'}`}>
+    {inStock ? 'ในสต๊อก' : 'ว่าง'}
+  </span>
+);
+
 const Products = () => {
   const { user } = useContext(AuthContext);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [manageProduct, setManageProduct] = useState(null);
+  const [editingVariant, setEditingVariant] = useState(null);
   const [variantForm, setVariantForm] = useState({ size: '', barcode: '' });
+  const [editForm, setEditForm] = useState({ size: '', barcode: '', in_stock: false });
   const [variantError, setVariantError] = useState('');
   const [variantLoading, setVariantLoading] = useState(false);
   const [expandedSizes, setExpandedSizes] = useState({});
@@ -90,6 +101,28 @@ const Products = () => {
     setVariantError('');
   };
 
+  const openManageModal = (product) => {
+    setManageProduct(product);
+    setEditingVariant(null);
+    setVariantError('');
+  };
+
+  const closeManageModal = () => {
+    setManageProduct(null);
+    setEditingVariant(null);
+    setVariantError('');
+  };
+
+  const startEditVariant = (variant) => {
+    setEditingVariant(variant);
+    setEditForm({
+      size: variant.size,
+      barcode: variant.barcode,
+      in_stock: isInStock(variant),
+    });
+    setVariantError('');
+  };
+
   const handleAddVariant = async (e) => {
     e.preventDefault();
     if (!selectedProduct) return;
@@ -99,12 +132,6 @@ const Products = () => {
 
     if (!size || !barcode) {
       setVariantError('กรุณากรอกไซส์และบาร์โค้ด');
-      return;
-    }
-
-    const duplicateBarcode = selectedProduct.variants.some((v) => v.barcode === barcode);
-    if (duplicateBarcode) {
-      setVariantError('บาร์โค้ดนี้มีในรุ่นนี้แล้ว แต่ละบาร์โค้ดต้องไม่เหมือนกัน');
       return;
     }
 
@@ -122,13 +149,68 @@ const Products = () => {
     }
   };
 
+  const handleEditVariant = async (e) => {
+    e.preventDefault();
+    if (!editingVariant) return;
+
+    const size = editForm.size.trim();
+    const barcode = editForm.barcode.trim();
+
+    if (!size || !barcode) {
+      setVariantError('กรุณากรอกไซส์และบาร์โค้ด');
+      return;
+    }
+
+    setVariantLoading(true);
+    setVariantError('');
+
+    try {
+      await api.put(`/variants/${editingVariant.id}`, {
+        size,
+        barcode,
+        stock_quantity: editForm.in_stock ? 1 : 0,
+      });
+      await fetchProducts();
+      const refreshed = (await api.get('/products')).data.find((p) => p.id === manageProduct.id);
+      setManageProduct(refreshed);
+      setEditingVariant(null);
+    } catch (err) {
+      setVariantError(err.response?.data?.error || 'แก้ไขไม่สำเร็จ');
+    } finally {
+      setVariantLoading(false);
+    }
+  };
+
+  const handleDeleteVariant = async (variant) => {
+    if (!window.confirm(`ลบบาร์โค้ด ${variant.barcode} ?`)) return;
+
+    setVariantLoading(true);
+    setVariantError('');
+
+    try {
+      await api.delete(`/variants/${variant.id}`);
+      await fetchProducts();
+      const refreshed = (await api.get('/products')).data.find((p) => p.id === manageProduct.id);
+      if (!refreshed || refreshed.variants.length === 0) {
+        closeManageModal();
+      } else {
+        setManageProduct(refreshed);
+      }
+      if (editingVariant?.id === variant.id) setEditingVariant(null);
+    } catch (err) {
+      setVariantError(err.response?.data?.error || 'ลบไม่สำเร็จ');
+    } finally {
+      setVariantLoading(false);
+    }
+  };
+
   if (loading) return <div>กำลังโหลดข้อมูลสินค้า...</div>;
 
   return (
     <div>
       <div className="inventory-header">
         <h1>สต๊อกสินค้าทั้งหมด</h1>
-        <p className="inventory-subtitle">รวมจำนวนชิ้นจากบาร์โค้ดทั้งหมดในแต่ละรุ่น</p>
+        <p className="inventory-subtitle">1 บาร์โค้ด = 1 ชิ้น · รวมชิ้น = จำนวนบาร์โค้ดที่อยู่ในสต๊อก</p>
       </div>
 
       {products.length === 0 ? (
@@ -157,6 +239,8 @@ const Products = () => {
                       <span>{summary.sizeCount} ไซส์</span>
                       <span>·</span>
                       <span>{summary.barcodeCount} บาร์โค้ด</span>
+                      <span>·</span>
+                      <span>{summary.totalStock} ชิ้นในสต๊อก</span>
                     </div>
                   </div>
 
@@ -170,40 +254,32 @@ const Products = () => {
                 <div className="inventory-size-grid">
                   {summary.sizeGroups.map((group) => {
                     const expandKey = `${product.id}-${group.size}`;
-                    const hasMultipleBarcodes = group.variants.length > 1;
-                    const isExpanded = expandedSizes[expandKey] ?? false;
+                    const isExpanded = expandedSizes[expandKey] ?? group.variants.length > 1;
 
                     return (
                       <div key={group.size} className="inventory-size-item">
                         <button
                           type="button"
-                          className={`inventory-size-chip ${hasMultipleBarcodes ? 'inventory-size-chip-expandable' : ''}`}
-                          onClick={() => hasMultipleBarcodes && toggleSizeExpand(product.id, group.size)}
-                          disabled={!hasMultipleBarcodes}
+                          className="inventory-size-chip inventory-size-chip-expandable"
+                          onClick={() => toggleSizeExpand(product.id, group.size)}
                         >
                           <span className="inventory-size-name">{group.size}</span>
-                          <span className="inventory-size-qty">{group.totalStock}</span>
-                          {hasMultipleBarcodes && (
-                            <span className="inventory-size-barcode-count">
-                              {group.variants.length} บาร์โค้ด
-                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            </span>
-                          )}
+                          <span className="inventory-size-qty">{group.inStock}</span>
+                          <span className="inventory-size-barcode-count">
+                            {group.inStock}/{group.variants.length} ชิ้น
+                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </span>
                         </button>
 
-                        {hasMultipleBarcodes && isExpanded && (
+                        {isExpanded && (
                           <div className="inventory-barcode-list">
                             {group.variants.map((v, index) => (
                               <div key={v.id} className="inventory-barcode-item">
                                 <span>#{index + 1} {v.barcode}</span>
-                                <strong>{v.stock_quantity} ชิ้น</strong>
+                                <StockBadge inStock={isInStock(v)} />
                               </div>
                             ))}
                           </div>
-                        )}
-
-                        {!hasMultipleBarcodes && group.variants[0] && (
-                          <div className="inventory-single-barcode">{group.variants[0].barcode}</div>
                         )}
                       </div>
                     );
@@ -212,12 +288,11 @@ const Products = () => {
 
                 {isAdmin && (
                   <div className="inventory-card-actions">
-                    <button
-                      type="button"
-                      className="btn btn-outline"
-                      onClick={() => openAddVariantModal(product)}
-                    >
-                      <Plus size={16} /> เพิ่มไซส์/บาร์โค้ด
+                    <button type="button" className="btn btn-outline" onClick={() => openAddVariantModal(product)}>
+                      <Plus size={16} /> เพิ่มบาร์โค้ด
+                    </button>
+                    <button type="button" className="btn btn-outline" onClick={() => openManageModal(product)}>
+                      <Settings2 size={16} /> แก้ไข/ลบ
                     </button>
                   </div>
                 )}
@@ -231,41 +306,13 @@ const Products = () => {
         <div className="modal-overlay">
           <div className="glass-panel modal-content" style={{ padding: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2>เพิ่มไซส์ / บาร์โค้ดให้รุ่นเดิม</h2>
+              <h2>เพิ่มบาร์โค้ดให้รุ่นเดิม</h2>
               <button type="button" className="btn btn-outline" onClick={closeAddVariantModal}>ปิด</button>
             </div>
 
-            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem' }}>
-              <p><strong>รหัส (Serial):</strong> {selectedProduct.serial}</p>
-              <p><strong>ชื่อสินค้า:</strong> {selectedProduct.name}</p>
-              <div style={{ marginBottom: 0 }}>
-                <strong>รายการที่มีอยู่:</strong>
-                {selectedProduct.variants.length === 0 ? (
-                  <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>-</p>
-                ) : (
-                  <div className="size-groups" style={{ marginTop: '0.5rem' }}>
-                    {groupVariantsBySize(selectedProduct.variants).map((group) => (
-                      <div key={group.size} className="size-group">
-                        <div className="size-group-header">
-                          <strong>{group.size}</strong>
-                          <span className="size-group-meta">
-                            {group.variants.length} บาร์โค้ด · รวม {group.totalStock} ชิ้น
-                          </span>
-                        </div>
-                        <div className="size-group-barcodes">
-                          {group.variants.map((v, index) => (
-                            <div key={v.id} className="barcode-row">
-                              <span className="barcode-code">#{index + 1} {v.barcode}</span>
-                              <span className="barcode-stock">{v.stock_quantity} ชิ้น</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <p style={{ marginBottom: '1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              <strong>{selectedProduct.serial}</strong> — {selectedProduct.name}
+            </p>
 
             {variantError && (
               <div className="badge badge-danger mb-4" style={{ display: 'block', padding: '1rem' }}>{variantError}</div>
@@ -285,7 +332,7 @@ const Products = () => {
               </div>
 
               <div className="input-group">
-                <label className="input-label">รหัสบาร์โค้ด (Barcode / QR)</label>
+                <label className="input-label">รหัสบาร์โค้ด (1 บาร์โค้ด = 1 ชิ้น)</label>
                 <input
                   type="text"
                   className="input-field"
@@ -297,13 +344,107 @@ const Products = () => {
               </div>
 
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                แต่ละไซส์มีได้หลายบาร์โค้ด แต่บาร์โค้ดต้องไม่ซ้ำกัน — สต๊อกเริ่มต้นที่ 0 หลังบันทึกแล้วไปหน้าสแกนสินค้าเพื่อรับเข้า
+                บันทึกแล้วสถานะเริ่มต้นเป็น &quot;ว่าง&quot; — ไปหน้าสแกนสินค้าแล้วกดรับเข้าเพื่อลงสต๊อก
               </p>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={variantLoading}>
                 {variantLoading ? 'กำลังบันทึก...' : 'บันทึก'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {manageProduct && (
+        <div className="modal-overlay">
+          <div className="glass-panel modal-content" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2>แก้ไข / ลบรายการ</h2>
+              <button type="button" className="btn btn-outline" onClick={closeManageModal}>ปิด</button>
+            </div>
+
+            <p style={{ marginBottom: '1rem' }}>
+              <strong>{manageProduct.serial}</strong> — {manageProduct.name}
+            </p>
+
+            {variantError && (
+              <div className="badge badge-danger mb-4" style={{ display: 'block', padding: '1rem' }}>{variantError}</div>
+            )}
+
+            {editingVariant ? (
+              <form onSubmit={handleEditVariant}>
+                <div className="input-group">
+                  <label className="input-label">ไซส์</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={editForm.size}
+                    onChange={(e) => setEditForm({ ...editForm, size: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">บาร์โค้ด</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={editForm.barcode}
+                    onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">สถานะสต๊อก</label>
+                  <select
+                    className="input-field"
+                    value={editForm.in_stock ? '1' : '0'}
+                    onChange={(e) => setEditForm({ ...editForm, in_stock: e.target.value === '1' })}
+                  >
+                    <option value="0">ว่าง (ยังไม่รับเข้า / ขายแล้ว)</option>
+                    <option value="1">ในสต๊อก (1 ชิ้น)</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setEditingVariant(null)}>
+                    ยกเลิก
+                  </button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={variantLoading}>
+                    {variantLoading ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="manage-variant-list">
+                {groupVariantsBySize(manageProduct.variants).map((group) => (
+                  <div key={group.size} className="size-group">
+                    <div className="size-group-header">
+                      <strong>{group.size}</strong>
+                      <span className="size-group-meta">
+                        {group.inStock}/{group.variants.length} ชิ้นในสต๊อก
+                      </span>
+                    </div>
+                    <div className="size-group-barcodes">
+                      {group.variants.map((v, index) => (
+                        <div key={v.id} className="manage-variant-row">
+                          <div>
+                            <span className="barcode-code">#{index + 1} {v.barcode}</span>
+                            <StockBadge inStock={isInStock(v)} />
+                          </div>
+                          <div className="manage-variant-actions">
+                            <button type="button" className="btn btn-outline btn-icon" onClick={() => startEditVariant(v)} title="แก้ไข">
+                              <Pencil size={16} />
+                            </button>
+                            <button type="button" className="btn btn-outline btn-icon btn-danger" onClick={() => handleDeleteVariant(v)} title="ลบ">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -62,6 +62,9 @@ async function initializeDatabase() {
       )
     `);
 
+    // 1 barcode = 1 piece: normalize legacy rows that stored quantity > 1
+    await pool.query('UPDATE product_variants SET stock_quantity = 1 WHERE stock_quantity > 1');
+
     // Seed Admin User
     const res = await pool.query("SELECT id FROM users WHERE username = $1", ["admin"]);
     if (res.rows.length === 0) {

@@ -124,7 +124,7 @@ const AddProduct = () => {
 
           <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>รายการไซส์และบาร์โค้ด</h3>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-            1 รุ่น (Serial) มีได้หลายไซส์ ไซส์เดียวกันมีได้หลายบาร์โค้ด แต่ทุกบาร์โค้ดต้องไม่ซ้ำกัน
+            1 รุ่น (Serial) มีได้หลายไซส์ · 1 บาร์โค้ด = 1 ชิ้น · ทุกบาร์โค้ดต้องไม่ซ้ำกัน
           </p>
           
           {variants.map((variant, index) => (

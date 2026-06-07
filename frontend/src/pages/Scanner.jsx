@@ -34,7 +34,7 @@ const Scanner = () => {
   const [manualBarcode, setManualBarcode] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [actionType, setActionType] = useState('sell');
-  const [quantity, setQuantity] = useState(1);
+  const [adjustStock, setAdjustStock] = useState('1');
   const [transactionSuccess, setTransactionSuccess] = useState('');
   const [transactionLoading, setTransactionLoading] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -54,7 +54,7 @@ const Scanner = () => {
     setProductData(null);
     setTransactionSuccess('');
     setModalError('');
-    setQuantity(1);
+    setAdjustStock('1');
     setActionType('sell');
     resumeScanner();
   }, [resumeScanner]);
@@ -119,17 +119,19 @@ const Scanner = () => {
     setProductData(res.data);
   };
 
+  const barcodeInStock = Number(productData?.stock_quantity) > 0;
+
   const executeTransaction = async () => {
-    const qty = parseInt(quantity, 10);
-    if (!Number.isFinite(qty) || qty < 1) {
-      setModalError('กรุณาระบุจำนวนที่ถูกต้อง (อย่างน้อย 1)');
+    if (actionType === 'sell' && !barcodeInStock) {
+      setModalError('บาร์โค้ดนี้ไม่อยู่ในสต๊อก');
+      return;
+    }
+    if (actionType === 'receive' && barcodeInStock) {
+      setModalError('บาร์โค้ดนี้อยู่ในสต๊อกแล้ว');
       return;
     }
 
-    if (actionType === 'sell' && qty > productData.stock_quantity) {
-      setModalError(`สต๊อกไม่พอ — คงเหลือ ${productData.stock_quantity} ชิ้น`);
-      return;
-    }
+    const payloadQty = actionType === 'adjust' ? parseInt(adjustStock, 10) : 1;
 
     setTransactionLoading(true);
     setModalError('');
@@ -138,18 +140,14 @@ const Scanner = () => {
       await api.post('/transaction', {
         variant_id: productData.variant_id,
         type: actionType,
-        quantity: qty,
+        quantity: payloadQty,
       });
       await refreshProductData(productData.barcode);
       setTransactionSuccess('done');
       setTimeout(resetAfterScan, 1500);
     } catch (err) {
       const msg = err.response?.data?.error;
-      setModalError(
-        msg === 'Insufficient stock'
-          ? `สต๊อกไม่พอ — คงเหลือ ${productData.stock_quantity} ชิ้น`
-          : msg || 'ทำรายการไม่สำเร็จ กรุณาลองใหม่'
-      );
+      setModalError(msg || 'ทำรายการไม่สำเร็จ กรุณาลองใหม่');
     } finally {
       setTransactionLoading(false);
     }
@@ -219,7 +217,7 @@ const Scanner = () => {
                 <p style={{ marginBottom: 0 }}>
                   <strong>ไซส์:</strong>{' '}
                   <span className="badge badge-success" style={{ fontSize: '0.9rem' }}>{productData.size}</span>
-                  {' '}· คงเหลือ {productData.stock_quantity} ชิ้น
+                  {' '}· {barcodeInStock ? 'ในสต๊อก (1 ชิ้น)' : 'ว่าง (0 ชิ้น)'}
                 </p>
               </div>
 
@@ -241,8 +239,7 @@ const Scanner = () => {
                             {isScannedSize && ' (ที่สแกน)'}
                           </span>
                           <span className="scanner-size-qty">
-                            {item.total_stock} ชิ้น
-                            {item.barcode_count > 1 && ` · ${item.barcode_count} บาร์โค้ด`}
+                            {item.total_stock}/{item.barcode_count} ชิ้นในสต๊อก
                           </span>
                         </div>
                       );
@@ -263,7 +260,7 @@ const Scanner = () => {
 
             {transactionSuccess ? (
               <div className="badge badge-success mt-4" style={{ display: 'block', padding: '1rem', textAlign: 'center', fontSize: '1.1rem' }}>
-                ทำรายการสำเร็จ! บาร์โค้ดนี้เหลือ {productData.stock_quantity} ชิ้น · รวมทั้งรุ่น {productData.product_total_stock} ชิ้น
+                ทำรายการสำเร็จ! บาร์โค้ดนี้{Number(productData.stock_quantity) > 0 ? 'อยู่ในสต๊อก' : 'ว่างแล้ว'} · รวมทั้งรุ่น {productData.product_total_stock} ชิ้น
               </div>
             ) : (
               <div style={{ marginTop: '2rem' }}>
@@ -295,19 +292,24 @@ const Scanner = () => {
                   </button>
                 </div>
 
-                <div className="input-group">
-                  <label className="input-label">
-                    {actionType === 'adjust' ? 'ระบุจำนวนที่นับได้จริง (จำนวนคงเหลือใหม่)' : 'ระบุจำนวน'}
-                  </label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    min="1"
-                    disabled={transactionLoading}
-                  />
-                </div>
+                {actionType === 'adjust' ? (
+                  <div className="input-group">
+                    <label className="input-label">สถานะสต๊อกของบาร์โค้ดนี้</label>
+                    <select
+                      className="input-field"
+                      value={adjustStock}
+                      onChange={(e) => setAdjustStock(e.target.value)}
+                      disabled={transactionLoading}
+                    >
+                      <option value="1">ในสต๊อก (1 ชิ้น)</option>
+                      <option value="0">ว่าง (0 ชิ้น)</option>
+                    </select>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                    1 บาร์โค้ด = 1 ชิ้น — {actionType === 'sell' ? 'ขายชิ้นนี้ 1 ชิ้น' : 'รับเข้าชิ้นนี้ 1 ชิ้น'}
+                  </p>
+                )}
 
                 <button
                   type="button"

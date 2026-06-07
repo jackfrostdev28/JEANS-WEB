@@ -569,6 +569,59 @@ h1, h2, h3, h4 {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.stock-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.stock-badge-in {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.stock-badge-out {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.manage-variant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.manage-variant-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.manage-variant-row:last-child {
+  border-bottom: none;
+}
+
+.manage-variant-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.btn-icon {
+  padding: 0.45rem !important;
+  min-width: auto;
 }
 
 @media (max-width: 768px) {

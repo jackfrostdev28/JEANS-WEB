@@ -18,10 +18,10 @@ setTimeout(async () => {
     const productId = insertProductRes.rows[0].id;
     
     const variants = [
-      { size: 'S', barcode: '8859651409061', stock: 10 },
-      { size: 'M', barcode: '8859651409062', stock: 15 },
-      { size: 'L', barcode: '8859651409063', stock: 8 },
-      { size: 'XL', barcode: '8859651409064', stock: 5 },
+      { size: 'S', barcode: '8859651409061', stock: 1 },
+      { size: 'M', barcode: '8859651409062', stock: 1 },
+      { size: 'L', barcode: '8859651409063', stock: 1 },
+      { size: 'XL', barcode: '8859651409064', stock: 1 },
     ];
     
     for (let v of variants) {

@@ -196,8 +196,8 @@ app.get('/api/scan/:barcode', authenticateToken, async (req, res) => {
   const sql = `
     SELECT pv.id as variant_id, pv.size, pv.barcode, pv.stock_quantity, 
            p.id as product_id, p.serial, p.name, p.price, p.image_url,
-           (SELECT SUM(pv2.stock_quantity) FROM product_variants pv2 
-            WHERE pv2.product_id = p.id AND LOWER(pv2.size) = LOWER(pv.size)) as size_total_stock,
+           (SELECT COUNT(*) FROM product_variants pv2 
+            WHERE pv2.product_id = p.id AND LOWER(pv2.size) = LOWER(pv.size) AND pv2.stock_quantity > 0) as size_total_stock,
            (SELECT COUNT(*) FROM product_variants pv2 
             WHERE pv2.product_id = p.id AND LOWER(pv2.size) = LOWER(pv.size)) as size_barcode_count
     FROM product_variants pv
@@ -210,7 +210,9 @@ app.get('/api/scan/:barcode', authenticateToken, async (req, res) => {
 
     const product = rows[0];
     const sizeStockRes = await db.query(
-      `SELECT MIN(size) as size, SUM(stock_quantity) as total_stock, COUNT(*) as barcode_count
+      `SELECT MIN(size) as size,
+              COUNT(*) FILTER (WHERE stock_quantity > 0) as in_stock_count,
+              COUNT(*) as barcode_count
        FROM product_variants
        WHERE product_id = $1
        GROUP BY LOWER(size)
@@ -220,7 +222,7 @@ app.get('/api/scan/:barcode', authenticateToken, async (req, res) => {
 
     const sizeStock = sizeStockRes.rows.map((row) => ({
       size: row.size,
-      total_stock: parseInt(row.total_stock, 10),
+      total_stock: parseInt(row.in_stock_count, 10),
       barcode_count: parseInt(row.barcode_count, 10),
     }));
 
@@ -234,39 +236,100 @@ app.get('/api/scan/:barcode', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/transaction', authenticateToken, async (req, res) => {
-  const { variant_id, type, quantity } = req.body; 
-  
+app.put('/api/variants/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const variantId = parseInt(req.params.id, 10);
+  const { size, barcode, stock_quantity } = req.body;
+
   try {
-    const { rows } = await db.query("SELECT stock_quantity FROM product_variants WHERE id = $1", [variant_id]);
-    if (rows.length === 0) return res.status(404).json({ error: "Variant not found" });
-    
-    let newStock = rows[0].stock_quantity;
-    let actualChange = parseInt(quantity);
-    
-    if (type === 'sell') {
-      if (!Number.isFinite(actualChange) || actualChange < 1) {
-        return res.status(400).json({ error: 'กรุณาระบุจำนวนที่ถูกต้อง' });
-      }
-      if (newStock < actualChange) return res.status(400).json({ error: "Insufficient stock" });
-      newStock -= actualChange;
-    } else if (type === 'receive' || type === 'return') {
-      newStock += actualChange;
-    } else if (type === 'adjust') {
-      actualChange = parseInt(quantity) - rows[0].stock_quantity;
-      newStock = parseInt(quantity);
-    } else {
-      return res.status(400).json({ error: "Invalid transaction type" });
+    const existing = await db.query('SELECT * FROM product_variants WHERE id = $1', [variantId]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'ไม่พบรายการบาร์โค้ด' });
     }
 
-    await db.query("UPDATE product_variants SET stock_quantity = $1 WHERE id = $2", [newStock, variant_id]);
-    
-    const dbQuantity = type === 'adjust' ? actualChange : quantity;
-    await db.query(
-      "INSERT INTO transactions (variant_id, user_id, type, quantity) VALUES ($1, $2, $3, $4)", 
-      [variant_id, req.user.id, type, dbQuantity]
+    const current = existing.rows[0];
+    const nextSize = size?.trim() || current.size;
+    const nextBarcode = barcode?.trim() || current.barcode;
+    let nextStock = current.stock_quantity;
+
+    if (stock_quantity !== undefined) {
+      const parsedStock = parseInt(stock_quantity, 10);
+      if (![0, 1].includes(parsedStock)) {
+        return res.status(400).json({ error: 'สต๊อกต่อบาร์โค้ดต้องเป็น 0 หรือ 1 เท่านั้น' });
+      }
+      nextStock = parsedStock;
+    }
+
+    if (nextBarcode !== current.barcode) {
+      const duplicate = await db.query('SELECT id FROM product_variants WHERE barcode = $1 AND id != $2', [nextBarcode, variantId]);
+      if (duplicate.rows.length > 0) {
+        return res.status(400).json({ error: 'บาร์โค้ดนี้ถูกใช้งานแล้ว' });
+      }
+    }
+
+    const updated = await db.query(
+      'UPDATE product_variants SET size = $1, barcode = $2, stock_quantity = $3 WHERE id = $4 RETURNING *',
+      [nextSize, nextBarcode, nextStock > 0 ? 1 : 0, variantId]
     );
-    
+
+    res.json(updated.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/variants/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const variantId = parseInt(req.params.id, 10);
+
+  try {
+    const existing = await db.query('SELECT * FROM product_variants WHERE id = $1', [variantId]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'ไม่พบรายการบาร์โค้ด' });
+    }
+
+    await db.query('DELETE FROM product_variants WHERE id = $1', [variantId]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/transaction', authenticateToken, async (req, res) => {
+  const { variant_id, type, quantity } = req.body;
+
+  try {
+    const { rows } = await db.query('SELECT stock_quantity FROM product_variants WHERE id = $1', [variant_id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Variant not found' });
+
+    const currentStock = rows[0].stock_quantity > 0 ? 1 : 0;
+    let newStock = currentStock;
+    let actualChange = 0;
+
+    if (type === 'sell') {
+      if (currentStock < 1) return res.status(400).json({ error: 'บาร์โค้ดนี้ไม่อยู่ในสต๊อก' });
+      newStock = 0;
+      actualChange = 1;
+    } else if (type === 'receive' || type === 'return') {
+      if (currentStock >= 1) return res.status(400).json({ error: 'บาร์โค้ดนี้อยู่ในสต๊อกแล้ว' });
+      newStock = 1;
+      actualChange = 1;
+    } else if (type === 'adjust') {
+      const targetStock = parseInt(quantity, 10);
+      if (![0, 1].includes(targetStock)) {
+        return res.status(400).json({ error: 'สต๊อกต่อบาร์โค้ดต้องเป็น 0 หรือ 1 เท่านั้น' });
+      }
+      actualChange = targetStock - currentStock;
+      newStock = targetStock;
+    } else {
+      return res.status(400).json({ error: 'Invalid transaction type' });
+    }
+
+    await db.query('UPDATE product_variants SET stock_quantity = $1 WHERE id = $2', [newStock, variant_id]);
+
+    await db.query(
+      'INSERT INTO transactions (variant_id, user_id, type, quantity) VALUES ($1, $2, $3, $4)',
+      [variant_id, req.user.id, type, actualChange]
+    );
+
     res.json({ success: true, newStock });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -293,7 +356,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     const salesMonthRes = await db.query("SELECT SUM(t.quantity * p.price) as total FROM transactions t JOIN product_variants pv ON t.variant_id = pv.id JOIN products p ON pv.product_id = p.id WHERE t.type = 'sell' AND CAST(t.timestamp AS TEXT) LIKE $1", [thisMonth]);
     if (salesMonthRes.rows[0].total) dashboard.salesMonth = parseFloat(salesMonthRes.rows[0].total);
 
-    const totalRes = await db.query("SELECT SUM(stock_quantity) as total FROM product_variants");
+    const totalRes = await db.query("SELECT COUNT(*) as total FROM product_variants WHERE stock_quantity > 0");
     if (totalRes.rows[0].total) dashboard.totalItems = parseInt(totalRes.rows[0].total);
 
     const lowStockRes = await db.query("SELECT p.name, p.serial, pv.size, pv.stock_quantity FROM product_variants pv JOIN products p ON pv.product_id = p.id WHERE pv.stock_quantity > 0 AND pv.stock_quantity <= 5 LIMIT 10");
