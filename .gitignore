@@ -1,0 +1,9 @@
+node_modules/
+.env
+backend/node_modules/
+backend/.env
+backend/inventory.sqlite
+backend/uploads/
+frontend/node_modules/
+frontend/dist/
+.DS_Store
