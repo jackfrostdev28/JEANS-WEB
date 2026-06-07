@@ -116,7 +116,7 @@ const Products = () => {
                           style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
                           onClick={() => openAddVariantModal(product)}
                         >
-                          <Plus size={16} /> เพิ่มไซส์
+                          <Plus size={16} /> เพิ่มไซส์/บาร์โค้ด
                         </button>
                       </td>
                     )}
@@ -137,14 +137,17 @@ const Products = () => {
         <div className="modal-overlay">
           <div className="glass-panel modal-content" style={{ padding: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2>เพิ่มไซส์ให้รุ่นเดิม</h2>
+              <h2>เพิ่มไซส์ / บาร์โค้ดให้รุ่นเดิม</h2>
               <button type="button" className="btn btn-outline" onClick={closeAddVariantModal}>ปิด</button>
             </div>
 
             <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem' }}>
               <p><strong>รหัส (Serial):</strong> {selectedProduct.serial}</p>
               <p><strong>ชื่อสินค้า:</strong> {selectedProduct.name}</p>
-              <p style={{ marginBottom: 0 }}><strong>ไซส์ที่มีอยู่:</strong> {selectedProduct.variants.map(v => v.size).join(', ') || '-'}</p>
+              <p style={{ marginBottom: 0 }}>
+                <strong>รายการที่มีอยู่:</strong>{' '}
+                {selectedProduct.variants.map(v => `${v.size} (${v.barcode})`).join(', ') || '-'}
+              </p>
             </div>
 
             {variantError && (
@@ -177,11 +180,11 @@ const Products = () => {
               </div>
 
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                สต๊อกเริ่มต้นที่ 0 — หลังเพิ่มไซส์แล้ว ไปหน้าสแกนสินค้าเพื่อรับเข้าสต๊อก
+                สามารถใช้ไซส์เดิมได้ถ้าบาร์โค้ดต่างกัน — สต๊อกเริ่มต้นที่ 0 หลังบันทึกแล้วไปหน้าสแกนสินค้าเพื่อรับเข้า
               </p>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={variantLoading}>
-                {variantLoading ? 'กำลังบันทึก...' : 'บันทึกไซส์ใหม่'}
+                {variantLoading ? 'กำลังบันทึก...' : 'บันทึก'}
               </button>
             </form>
           </div>

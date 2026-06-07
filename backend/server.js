@@ -144,14 +144,6 @@ app.post('/api/products/:id/variants', authenticateToken, requireAdmin, async (r
       return res.status(404).json({ error: 'ไม่พบสินค้า' });
     }
 
-    const existingSize = await db.query(
-      'SELECT id FROM product_variants WHERE product_id = $1 AND LOWER(size) = LOWER($2)',
-      [productId, normalizedSize]
-    );
-    if (existingSize.rows.length > 0) {
-      return res.status(400).json({ error: `ไซส์ ${normalizedSize} มีอยู่ในรุ่นนี้แล้ว` });
-    }
-
     const existingBarcode = await db.query(
       'SELECT id FROM product_variants WHERE barcode = $1',
       [normalizedBarcode]
