@@ -1,17 +1,23 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../AuthContext';
-import { LayoutDashboard, PackageSearch, PackagePlus, ScanBarcode, History, Users, LogOut } from 'lucide-react';
+import { LayoutDashboard, PackageSearch, PackagePlus, ScanBarcode, History, Users, LogOut, Menu, X } from 'lucide-react';
 
 const Layout = () => {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
+    setSidebarOpen(false);
     logout();
     navigate('/login');
   };
+
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
 
   const navItems = [
     { path: '/', label: 'แดชบอร์ด', icon: LayoutDashboard, adminOnly: false },
@@ -24,11 +30,27 @@ const Layout = () => {
 
   return (
     <div className="app-container">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          ระบบจัดการสต๊อก
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-header">
+          <div className="sidebar-brand">ระบบจัดการสต๊อก</div>
+          <button
+            type="button"
+            className="sidebar-close-btn"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="ปิดเมนู"
+          >
+            <X size={22} />
+          </button>
         </div>
-        <div className="mb-4 text-center" style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem' }}>
+        <div className="sidebar-user">
           ผู้ใช้งาน: {user?.name} ({user?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงานขาย'})
         </div>
         <nav className="sidebar-nav">
@@ -47,16 +69,30 @@ const Layout = () => {
             );
           })}
           
-          <button onClick={handleLogout} className="nav-item" style={{ marginTop: 'auto', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+          <button onClick={handleLogout} className="nav-item nav-item-logout">
             <LogOut size={20} />
             ออกจากระบบ
           </button>
         </nav>
       </aside>
       
-      <main className="main-content">
-        <Outlet />
-      </main>
+      <div className="content-wrapper">
+        <header className="mobile-header">
+          <button
+            type="button"
+            className="menu-toggle-btn"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="เปิดเมนู"
+          >
+            <Menu size={22} />
+          </button>
+          <span className="mobile-header-title">ระบบจัดการสต๊อก</span>
+        </header>
+
+        <main className="main-content">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 };
