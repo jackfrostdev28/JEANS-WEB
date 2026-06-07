@@ -368,8 +368,8 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     const salesMonthRes = await db.query("SELECT SUM(t.quantity * p.price) as total FROM transactions t JOIN product_variants pv ON t.variant_id = pv.id JOIN products p ON pv.product_id = p.id WHERE t.type = 'sell' AND CAST(t.timestamp AS TEXT) LIKE $1", [thisMonth]);
     if (salesMonthRes.rows[0].total) dashboard.salesMonth = parseFloat(salesMonthRes.rows[0].total);
 
-    const totalRes = await db.query("SELECT COUNT(*) as total FROM product_variants WHERE stock_quantity > 0");
-    if (totalRes.rows[0].total) dashboard.totalItems = parseInt(totalRes.rows[0].total);
+    const totalRes = await db.query('SELECT COUNT(*) as total FROM product_variants');
+    dashboard.totalItems = parseInt(totalRes.rows[0].total, 10) || 0;
 
     const lowStockRes = await db.query("SELECT p.name, p.serial, pv.size, pv.stock_quantity FROM product_variants pv JOIN products p ON pv.product_id = p.id WHERE pv.stock_quantity > 0 AND pv.stock_quantity <= 5 LIMIT 10");
     dashboard.lowStockItems = lowStockRes.rows;

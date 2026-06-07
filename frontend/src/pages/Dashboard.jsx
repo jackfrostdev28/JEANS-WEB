@@ -54,6 +54,7 @@ const Dashboard = () => {
           <div className="stat-icon"><Package size={24} /></div>
           <div className="stat-info">
             <h3>สินค้าคงคลังทั้งหมด</h3>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>1 บาร์โค้ด = 1 ชิ้น</p>
             <div className="value">{data.totalItems?.toLocaleString() || 0}</div>
           </div>
         </div>
