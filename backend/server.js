@@ -61,7 +61,7 @@ app.post('/api/login', async (req, res) => {
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role, name: user.name }, SECRET_KEY, { expiresIn: '24h' });
     res.json({ token, user: { id: user.id, username: user.username, role: user.role, name: user.name } });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || String(err), stack: err.stack });
   }
 });
 
