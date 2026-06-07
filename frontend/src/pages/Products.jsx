@@ -1,22 +1,49 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '../api';
 import { AuthContext } from '../AuthContext';
+
+const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
 const groupVariantsBySize = (variants) => {
   const groups = new Map();
 
   variants.forEach((variant) => {
-    const sizeKey = variant.size.trim();
+    const displaySize = variant.size.trim();
+    const sizeKey = displaySize.toLowerCase();
     if (!groups.has(sizeKey)) {
-      groups.set(sizeKey, { size: sizeKey, variants: [], totalStock: 0 });
+      groups.set(sizeKey, { size: displaySize, variants: [], totalStock: 0 });
     }
     const group = groups.get(sizeKey);
     group.variants.push(variant);
-    group.totalStock += variant.stock_quantity;
+    group.totalStock += Number(variant.stock_quantity) || 0;
   });
 
-  return Array.from(groups.values());
+  return Array.from(groups.values()).sort((a, b) => {
+    const aIndex = SIZE_ORDER.indexOf(a.size.toUpperCase());
+    const bIndex = SIZE_ORDER.indexOf(b.size.toUpperCase());
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    return a.size.localeCompare(b.size, 'th');
+  });
+};
+
+const getProductSummary = (variants) => {
+  const groups = groupVariantsBySize(variants);
+  const totalStock = variants.reduce((sum, v) => sum + (Number(v.stock_quantity) || 0), 0);
+  return {
+    totalStock,
+    sizeCount: groups.length,
+    barcodeCount: variants.length,
+    sizeGroups: groups,
+  };
+};
+
+const getImageUrl = (imageUrl) => {
+  if (!imageUrl) return null;
+  const base = import.meta.env.DEV ? 'http://localhost:5000' : 'https://jeans-api.onrender.com';
+  return `${base}${imageUrl}`;
 };
 
 const Products = () => {
@@ -27,6 +54,7 @@ const Products = () => {
   const [variantForm, setVariantForm] = useState({ size: '', barcode: '' });
   const [variantError, setVariantError] = useState('');
   const [variantLoading, setVariantLoading] = useState(false);
+  const [expandedSizes, setExpandedSizes] = useState({});
 
   const isAdmin = user?.role === 'admin';
 
@@ -43,6 +71,11 @@ const Products = () => {
       console.error(err);
       setLoading(false);
     }
+  };
+
+  const toggleSizeExpand = (productId, size) => {
+    const key = `${productId}-${size}`;
+    setExpandedSizes((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const openAddVariantModal = (product) => {
@@ -93,87 +126,106 @@ const Products = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div className="inventory-header">
         <h1>สต๊อกสินค้าทั้งหมด</h1>
+        <p className="inventory-subtitle">รวมจำนวนชิ้นจากบาร์โค้ดทั้งหมดในแต่ละรุ่น</p>
       </div>
 
-      <div className="glass-panel" style={{ padding: '1.5rem' }}>
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>รูปภาพ</th>
-                <th>รหัส (Serial)</th>
-                <th>ชื่อสินค้า</th>
-                <th>ราคา</th>
-                <th>ไซส์ & คงเหลือ</th>
-                {isAdmin && <th>จัดการ</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {products.map(product => {
-                const totalStock = product.variants.reduce((acc, v) => acc + v.stock_quantity, 0);
-                return (
-                  <tr key={product.id}>
-                    <td>
-                      {product.image_url ? (
-                        <img src={`http://localhost:5000${product.image_url}`} alt={product.name} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} />
-                      ) : (
-                        <div style={{ width: '50px', height: '50px', background: '#e2e8f0', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', color: '#64748b' }}>ไม่มีรูป</div>
-                      )}
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{product.serial}</td>
-                    <td>{product.name}</td>
-                    <td>฿{product.price.toLocaleString()}</td>
-                    <td>
-                      <div className="size-groups">
-                        {groupVariantsBySize(product.variants).map((group) => (
-                          <div key={group.size} className="size-group">
-                            <div className="size-group-header">
-                              <strong>{group.size}</strong>
-                              <span className="size-group-meta">
-                                {group.variants.length} บาร์โค้ด · รวม {group.totalStock} ชิ้น
-                              </span>
-                            </div>
-                            <div className="size-group-barcodes">
-                              {group.variants.map((v, index) => (
-                                <div key={v.id} className="barcode-row">
-                                  <span className="barcode-code">#{index + 1} {v.barcode}</span>
-                                  <span className="barcode-stock">{v.stock_quantity} ชิ้น</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)', marginTop: '0.5rem' }}>
-                        รวมทั้งหมด: {totalStock}
-                      </div>
-                    </td>
-                    {isAdmin && (
-                      <td>
+      {products.length === 0 ? (
+        <div className="glass-panel inventory-empty">ไม่พบข้อมูลสินค้า</div>
+      ) : (
+        <div className="inventory-list">
+          {products.map((product) => {
+            const summary = getProductSummary(product.variants);
+
+            return (
+              <div key={product.id} className="glass-panel inventory-card">
+                <div className="inventory-card-top">
+                  <div className="inventory-card-image">
+                    {product.image_url ? (
+                      <img src={getImageUrl(product.image_url)} alt={product.name} />
+                    ) : (
+                      <span>ไม่มีรูป</span>
+                    )}
+                  </div>
+
+                  <div className="inventory-card-info">
+                    <div className="inventory-card-serial">{product.serial}</div>
+                    <div className="inventory-card-name">{product.name}</div>
+                    <div className="inventory-card-price">฿{Number(product.price).toLocaleString()}</div>
+                    <div className="inventory-card-stats">
+                      <span>{summary.sizeCount} ไซส์</span>
+                      <span>·</span>
+                      <span>{summary.barcodeCount} บาร์โค้ด</span>
+                    </div>
+                  </div>
+
+                  <div className="inventory-card-total">
+                    <span className="inventory-total-label">รวมทั้งรุ่น</span>
+                    <span className="inventory-total-value">{summary.totalStock}</span>
+                    <span className="inventory-total-unit">ชิ้น</span>
+                  </div>
+                </div>
+
+                <div className="inventory-size-grid">
+                  {summary.sizeGroups.map((group) => {
+                    const expandKey = `${product.id}-${group.size}`;
+                    const hasMultipleBarcodes = group.variants.length > 1;
+                    const isExpanded = expandedSizes[expandKey] ?? false;
+
+                    return (
+                      <div key={group.size} className="inventory-size-item">
                         <button
                           type="button"
-                          className="btn btn-outline"
-                          style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
-                          onClick={() => openAddVariantModal(product)}
+                          className={`inventory-size-chip ${hasMultipleBarcodes ? 'inventory-size-chip-expandable' : ''}`}
+                          onClick={() => hasMultipleBarcodes && toggleSizeExpand(product.id, group.size)}
+                          disabled={!hasMultipleBarcodes}
                         >
-                          <Plus size={16} /> เพิ่มไซส์/บาร์โค้ด
+                          <span className="inventory-size-name">{group.size}</span>
+                          <span className="inventory-size-qty">{group.totalStock}</span>
+                          {hasMultipleBarcodes && (
+                            <span className="inventory-size-barcode-count">
+                              {group.variants.length} บาร์โค้ด
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </span>
+                          )}
                         </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-              {products.length === 0 && (
-                <tr>
-                  <td colSpan={isAdmin ? 6 : 5} className="text-center text-muted">ไม่พบข้อมูลสินค้า</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+
+                        {hasMultipleBarcodes && isExpanded && (
+                          <div className="inventory-barcode-list">
+                            {group.variants.map((v, index) => (
+                              <div key={v.id} className="inventory-barcode-item">
+                                <span>#{index + 1} {v.barcode}</span>
+                                <strong>{v.stock_quantity} ชิ้น</strong>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {!hasMultipleBarcodes && group.variants[0] && (
+                          <div className="inventory-single-barcode">{group.variants[0].barcode}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {isAdmin && (
+                  <div className="inventory-card-actions">
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => openAddVariantModal(product)}
+                    >
+                      <Plus size={16} /> เพิ่มไซส์/บาร์โค้ด
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-      </div>
+      )}
 
       {selectedProduct && (
         <div className="modal-overlay">

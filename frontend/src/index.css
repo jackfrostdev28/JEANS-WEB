@@ -360,7 +360,248 @@ h1, h2, h3, h4 {
   color: var(--text-main);
 }
 
-/* Size groups (inventory) */
+/* Inventory page */
+.inventory-header {
+  margin-bottom: 1.5rem;
+}
+
+.inventory-subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-top: 0.35rem;
+}
+
+.inventory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.inventory-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.inventory-card {
+  padding: 1.25rem;
+}
+
+.inventory-card-top {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.inventory-card-image {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #e2e8f0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.inventory-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inventory-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.inventory-card-serial {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+}
+
+.inventory-card-name {
+  font-size: 0.95rem;
+  color: var(--text-main);
+  margin-top: 0.15rem;
+}
+
+.inventory-card-price {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.inventory-card-stats {
+  display: flex;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+
+.inventory-card-total {
+  text-align: center;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(30, 64, 175, 0.08) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  min-width: 72px;
+  flex-shrink: 0;
+}
+
+.inventory-total-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.inventory-total-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  line-height: 1.2;
+}
+
+.inventory-total-unit {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.inventory-size-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.75rem;
+}
+
+.inventory-size-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.inventory-size-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.75rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-sm);
+  background: white;
+  width: 100%;
+  cursor: default;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.inventory-size-chip-expandable {
+  cursor: pointer;
+}
+
+.inventory-size-chip-expandable:hover {
+  border-color: var(--primary-light);
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.inventory-size-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.inventory-size-qty {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  line-height: 1;
+}
+
+.inventory-size-barcode-count {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.inventory-single-barcode {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-align: center;
+  word-break: break-all;
+  padding: 0 0.25rem;
+}
+
+.inventory-barcode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  background: #f8fafc;
+  border-radius: var(--radius-sm);
+  border: 1px solid #e2e8f0;
+}
+
+.inventory-barcode-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.inventory-barcode-item strong {
+  color: var(--text-main);
+  flex-shrink: 0;
+}
+
+.inventory-card-actions {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+  .inventory-card-top {
+    flex-wrap: wrap;
+  }
+
+  .inventory-card-total {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.65rem;
+  }
+
+  .inventory-total-label,
+  .inventory-total-unit {
+    display: inline;
+    font-size: 0.8rem;
+  }
+
+  .inventory-total-value {
+    display: inline;
+    font-size: 1.25rem;
+  }
+
+  .inventory-size-grid {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  }
+}
+
+/* Size groups (inventory modal) */
 .size-groups {
   display: flex;
   flex-direction: column;
