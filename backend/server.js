@@ -245,6 +245,9 @@ app.post('/api/transaction', authenticateToken, async (req, res) => {
     let actualChange = parseInt(quantity);
     
     if (type === 'sell') {
+      if (!Number.isFinite(actualChange) || actualChange < 1) {
+        return res.status(400).json({ error: 'กรุณาระบุจำนวนที่ถูกต้อง' });
+      }
       if (newStock < actualChange) return res.status(400).json({ error: "Insufficient stock" });
       newStock -= actualChange;
     } else if (type === 'receive' || type === 'return') {

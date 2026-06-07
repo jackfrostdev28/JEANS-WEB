@@ -4,6 +4,7 @@ const api = axios.create({
   baseURL: import.meta.env.DEV 
     ? 'http://localhost:5000/api' 
     : 'https://jeans-api.onrender.com/api',
+  timeout: 60000,
 });
 
 api.interceptors.request.use((config) => {
