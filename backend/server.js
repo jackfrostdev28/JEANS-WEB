@@ -107,22 +107,35 @@ app.get('/api/products', authenticateToken, async (req, res) => {
 app.post('/api/products', authenticateToken, requireAdmin, async (req, res) => {
   const { serial, name, price, variants } = req.body;
   try {
+    const normalizedVariants = (variants || [])
+      .filter((v) => v.size?.trim() && v.barcode?.trim())
+      .map((v) => ({ size: v.size.trim(), barcode: v.barcode.trim() }));
+
+    const barcodeSet = new Set();
+    for (const variant of normalizedVariants) {
+      if (barcodeSet.has(variant.barcode)) {
+        return res.status(400).json({ error: `บาร์โค้ด ${variant.barcode} ซ้ำในรายการ แต่ละบาร์โค้ดต้องไม่เหมือนกัน` });
+      }
+      barcodeSet.add(variant.barcode);
+    }
+
     const productRes = await db.query(
       "INSERT INTO products (serial, name, price) VALUES ($1, $2, $3) RETURNING id",
       [serial, name, price]
     );
     const productId = productRes.rows[0].id;
     
-    if (variants && variants.length > 0) {
-      for (let v of variants) {
-        await db.query(
-          "INSERT INTO product_variants (product_id, size, barcode, stock_quantity) VALUES ($1, $2, $3, 0)",
-          [productId, v.size, v.barcode]
-        );
-      }
+    for (const variant of normalizedVariants) {
+      await db.query(
+        "INSERT INTO product_variants (product_id, size, barcode, stock_quantity) VALUES ($1, $2, $3, 0)",
+        [productId, variant.size, variant.barcode]
+      );
     }
-    res.json({ id: productId, serial, name, price, variants });
+    res.json({ id: productId, serial, name, price, variants: normalizedVariants });
   } catch (err) {
+    if (err.code === '23505' && err.constraint?.includes('barcode')) {
+      return res.status(400).json({ error: 'บาร์โค้ดนี้ถูกใช้งานแล้วในระบบ' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -182,7 +195,11 @@ app.get('/api/scan/:barcode', authenticateToken, async (req, res) => {
   const barcode = req.params.barcode;
   const sql = `
     SELECT pv.id as variant_id, pv.size, pv.barcode, pv.stock_quantity, 
-           p.id as product_id, p.serial, p.name, p.price, p.image_url
+           p.id as product_id, p.serial, p.name, p.price, p.image_url,
+           (SELECT SUM(pv2.stock_quantity) FROM product_variants pv2 
+            WHERE pv2.product_id = p.id AND LOWER(pv2.size) = LOWER(pv.size)) as size_total_stock,
+           (SELECT COUNT(*) FROM product_variants pv2 
+            WHERE pv2.product_id = p.id AND LOWER(pv2.size) = LOWER(pv.size)) as size_barcode_count
     FROM product_variants pv
     JOIN products p ON pv.product_id = p.id
     WHERE pv.barcode = $1
@@ -190,7 +207,28 @@ app.get('/api/scan/:barcode', authenticateToken, async (req, res) => {
   try {
     const { rows } = await db.query(sql, [barcode]);
     if (rows.length === 0) return res.status(404).json({ error: "Barcode not found" });
-    res.json(rows[0]);
+
+    const product = rows[0];
+    const sizeStockRes = await db.query(
+      `SELECT MIN(size) as size, SUM(stock_quantity) as total_stock, COUNT(*) as barcode_count
+       FROM product_variants
+       WHERE product_id = $1
+       GROUP BY LOWER(size)
+       ORDER BY MIN(size)`,
+      [product.product_id]
+    );
+
+    const sizeStock = sizeStockRes.rows.map((row) => ({
+      size: row.size,
+      total_stock: parseInt(row.total_stock, 10),
+      barcode_count: parseInt(row.barcode_count, 10),
+    }));
+
+    res.json({
+      ...product,
+      size_stock: sizeStock,
+      product_total_stock: sizeStock.reduce((sum, s) => sum + s.total_stock, 0),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

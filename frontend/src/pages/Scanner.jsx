@@ -63,6 +63,11 @@ const Scanner = () => {
     }
   };
 
+  const refreshProductData = async (barcode) => {
+    const res = await api.get(`/scan/${barcode}`);
+    setProductData(res.data);
+  };
+
   const executeTransaction = async () => {
     try {
       const res = await api.post('/transaction', {
@@ -71,7 +76,7 @@ const Scanner = () => {
         quantity: quantity
       });
       setTransactionSuccess(`Success! New stock is ${res.data.newStock}`);
-      setProductData({ ...productData, stock_quantity: res.data.newStock });
+      await refreshProductData(productData.barcode);
       setTimeout(() => {
         setShowModal(false);
         setScanResult(null);
@@ -122,16 +127,54 @@ const Scanner = () => {
             </div>
             
             <div style={{ marginTop: '1.5rem', background: '#f8fafc', padding: '1.5rem', borderRadius: '8px' }}>
-              <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-dark)' }}>{productData.name}</h3>
-              <p><strong>รหัส (Serial):</strong> {productData.serial}</p>
-              <p><strong>ไซส์:</strong> <span className="badge badge-success" style={{ fontSize: '1rem' }}>{productData.size}</span></p>
-              <p><strong>ราคา:</strong> ฿{productData.price.toLocaleString()}</p>
-              <p><strong>คงเหลือปัจจุบัน:</strong> {productData.stock_quantity}</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>รุ่น (Serial)</p>
+              <h3 style={{ fontSize: '1.25rem', color: 'var(--primary-dark)', marginBottom: '0.25rem' }}>{productData.serial}</h3>
+              <p style={{ marginBottom: '1rem' }}>{productData.name} · ฿{productData.price.toLocaleString()}</p>
+
+              <div style={{ padding: '0.75rem', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
+                <p style={{ marginBottom: '0.25rem' }}><strong>บาร์โค้ดที่สแกน:</strong> {productData.barcode}</p>
+                <p style={{ marginBottom: 0 }}>
+                  <strong>ไซส์:</strong>{' '}
+                  <span className="badge badge-success" style={{ fontSize: '0.9rem' }}>{productData.size}</span>
+                  {' '}· คงเหลือ {productData.stock_quantity} ชิ้น
+                </p>
+              </div>
+
+              {productData.size_stock?.length > 0 && (
+                <div>
+                  <p style={{ fontWeight: 600, marginBottom: '0.5rem', color: 'var(--primary-dark)' }}>
+                    สต๊อกคงเหลือทั้งรุ่น {productData.serial}
+                  </p>
+                  <div className="scanner-size-stock-list">
+                    {productData.size_stock.map((item) => {
+                      const isScannedSize = item.size.toLowerCase() === productData.size.toLowerCase();
+                      return (
+                        <div
+                          key={item.size}
+                          className={`scanner-size-row ${isScannedSize ? 'scanner-size-row-active' : ''}`}
+                        >
+                          <span className="scanner-size-label">
+                            {item.size}
+                            {isScannedSize && ' (ที่สแกน)'}
+                          </span>
+                          <span className="scanner-size-qty">
+                            {item.total_stock} ชิ้น
+                            {item.barcode_count > 1 && ` · ${item.barcode_count} บาร์โค้ด`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p style={{ marginTop: '0.75rem', marginBottom: 0, fontWeight: 600, color: 'var(--primary-dark)' }}>
+                    รวมทั้งรุ่น: {productData.product_total_stock} ชิ้น
+                  </p>
+                </div>
+              )}
             </div>
 
             {transactionSuccess ? (
               <div className="badge badge-success mt-4" style={{ display: 'block', padding: '1rem', textAlign: 'center', fontSize: '1.1rem' }}>
-                ทำรายการสำเร็จ! (คงเหลือ: {productData.stock_quantity})
+                ทำรายการสำเร็จ! บาร์โค้ดนี้เหลือ {productData.stock_quantity} ชิ้น · รวมทั้งรุ่น {productData.product_total_stock} ชิ้น
               </div>
             ) : (
               <div style={{ marginTop: '2rem' }}>

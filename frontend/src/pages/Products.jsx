@@ -3,6 +3,22 @@ import { Plus } from 'lucide-react';
 import api from '../api';
 import { AuthContext } from '../AuthContext';
 
+const groupVariantsBySize = (variants) => {
+  const groups = new Map();
+
+  variants.forEach((variant) => {
+    const sizeKey = variant.size.trim();
+    if (!groups.has(sizeKey)) {
+      groups.set(sizeKey, { size: sizeKey, variants: [], totalStock: 0 });
+    }
+    const group = groups.get(sizeKey);
+    group.variants.push(variant);
+    group.totalStock += variant.stock_quantity;
+  });
+
+  return Array.from(groups.values());
+};
+
 const Products = () => {
   const { user } = useContext(AuthContext);
   const [products, setProducts] = useState([]);
@@ -45,11 +61,25 @@ const Products = () => {
     e.preventDefault();
     if (!selectedProduct) return;
 
+    const size = variantForm.size.trim();
+    const barcode = variantForm.barcode.trim();
+
+    if (!size || !barcode) {
+      setVariantError('กรุณากรอกไซส์และบาร์โค้ด');
+      return;
+    }
+
+    const duplicateBarcode = selectedProduct.variants.some((v) => v.barcode === barcode);
+    if (duplicateBarcode) {
+      setVariantError('บาร์โค้ดนี้มีในรุ่นนี้แล้ว แต่ละบาร์โค้ดต้องไม่เหมือนกัน');
+      return;
+    }
+
     setVariantLoading(true);
     setVariantError('');
 
     try {
-      await api.post(`/products/${selectedProduct.id}/variants`, variantForm);
+      await api.post(`/products/${selectedProduct.id}/variants`, { size, barcode });
       await fetchProducts();
       closeAddVariantModal();
     } catch (err) {
@@ -96,15 +126,27 @@ const Products = () => {
                     <td>{product.name}</td>
                     <td>฿{product.price.toLocaleString()}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                        {product.variants.map(v => (
-                          <div key={v.id} style={{ padding: '0.25rem 0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '0.875rem' }}>
-                            <strong>{v.size}:</strong> {v.stock_quantity}
-                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{v.barcode}</div>
+                      <div className="size-groups">
+                        {groupVariantsBySize(product.variants).map((group) => (
+                          <div key={group.size} className="size-group">
+                            <div className="size-group-header">
+                              <strong>{group.size}</strong>
+                              <span className="size-group-meta">
+                                {group.variants.length} บาร์โค้ด · รวม {group.totalStock} ชิ้น
+                              </span>
+                            </div>
+                            <div className="size-group-barcodes">
+                              {group.variants.map((v, index) => (
+                                <div key={v.id} className="barcode-row">
+                                  <span className="barcode-code">#{index + 1} {v.barcode}</span>
+                                  <span className="barcode-stock">{v.stock_quantity} ชิ้น</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--primary-dark)', marginTop: '0.5rem' }}>
                         รวมทั้งหมด: {totalStock}
                       </div>
                     </td>
@@ -144,10 +186,33 @@ const Products = () => {
             <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem' }}>
               <p><strong>รหัส (Serial):</strong> {selectedProduct.serial}</p>
               <p><strong>ชื่อสินค้า:</strong> {selectedProduct.name}</p>
-              <p style={{ marginBottom: 0 }}>
-                <strong>รายการที่มีอยู่:</strong>{' '}
-                {selectedProduct.variants.map(v => `${v.size} (${v.barcode})`).join(', ') || '-'}
-              </p>
+              <div style={{ marginBottom: 0 }}>
+                <strong>รายการที่มีอยู่:</strong>
+                {selectedProduct.variants.length === 0 ? (
+                  <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>-</p>
+                ) : (
+                  <div className="size-groups" style={{ marginTop: '0.5rem' }}>
+                    {groupVariantsBySize(selectedProduct.variants).map((group) => (
+                      <div key={group.size} className="size-group">
+                        <div className="size-group-header">
+                          <strong>{group.size}</strong>
+                          <span className="size-group-meta">
+                            {group.variants.length} บาร์โค้ด · รวม {group.totalStock} ชิ้น
+                          </span>
+                        </div>
+                        <div className="size-group-barcodes">
+                          {group.variants.map((v, index) => (
+                            <div key={v.id} className="barcode-row">
+                              <span className="barcode-code">#{index + 1} {v.barcode}</span>
+                              <span className="barcode-stock">{v.stock_quantity} ชิ้น</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {variantError && (
@@ -180,7 +245,7 @@ const Products = () => {
               </div>
 
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                สามารถใช้ไซส์เดิมได้ถ้าบาร์โค้ดต่างกัน — สต๊อกเริ่มต้นที่ 0 หลังบันทึกแล้วไปหน้าสแกนสินค้าเพื่อรับเข้า
+                แต่ละไซส์มีได้หลายบาร์โค้ด แต่บาร์โค้ดต้องไม่ซ้ำกัน — สต๊อกเริ่มต้นที่ 0 หลังบันทึกแล้วไปหน้าสแกนสินค้าเพื่อรับเข้า
               </p>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={variantLoading}>

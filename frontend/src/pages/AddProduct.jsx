@@ -43,11 +43,24 @@ const AddProduct = () => {
       return;
     }
 
-    const validVariants = variants.filter(v => v.size && v.barcode);
+    const validVariants = variants
+      .filter(v => v.size?.trim() && v.barcode?.trim())
+      .map(v => ({ size: v.size.trim(), barcode: v.barcode.trim() }));
+
     if (validVariants.length === 0) {
       setError('กรุณาเพิ่มขนาดและบาร์โค้ดอย่างน้อย 1 รายการ');
       setLoading(false);
       return;
+    }
+
+    const barcodeSet = new Set();
+    for (const variant of validVariants) {
+      if (barcodeSet.has(variant.barcode)) {
+        setError(`บาร์โค้ด ${variant.barcode} ซ้ำในรายการ แต่ละบาร์โค้ดต้องไม่เหมือนกัน`);
+        setLoading(false);
+        return;
+      }
+      barcodeSet.add(variant.barcode);
     }
 
     try {
@@ -55,7 +68,7 @@ const AddProduct = () => {
         serial: formData.serial,
         name: formData.name,
         price: Number(formData.price),
-        variants: validVariants.map(v => ({ size: v.size, barcode: v.barcode }))
+        variants: validVariants
       });
       alert('บันทึกสินค้าเรียบร้อยแล้ว');
       navigate('/inventory');
@@ -109,7 +122,10 @@ const AddProduct = () => {
             </div>
           </div>
 
-          <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>รายการไซส์และบาร์โค้ด</h3>
+          <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>รายการไซส์และบาร์โค้ด</h3>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+            1 รุ่น (Serial) มีได้หลายไซส์ ไซส์เดียวกันมีได้หลายบาร์โค้ด แต่ทุกบาร์โค้ดต้องไม่ซ้ำกัน
+          </p>
           
           {variants.map((variant, index) => (
             <div key={variant.id} style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', alignItems: 'flex-end' }}>
@@ -140,7 +156,7 @@ const AddProduct = () => {
           ))}
 
           <button type="button" className="btn btn-outline" onClick={handleAddVariant} style={{ marginTop: '0.5rem', marginBottom: '2rem' }}>
-            <Plus size={18} /> เพิ่มไซส์
+            <Plus size={18} /> เพิ่มไซส์/บาร์โค้ด
           </button>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
