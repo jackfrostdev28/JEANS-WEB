@@ -222,14 +222,26 @@ app.get('/api/scan/:barcode', authenticateToken, async (req, res) => {
 
     const sizeStock = sizeStockRes.rows.map((row) => ({
       size: row.size,
-      total_stock: parseInt(row.in_stock_count, 10),
+      total_pieces: parseInt(row.barcode_count, 10),
+      in_stock: parseInt(row.in_stock_count, 10),
       barcode_count: parseInt(row.barcode_count, 10),
     }));
+
+    const totalPiecesRes = await db.query(
+      'SELECT COUNT(*) as total FROM product_variants WHERE product_id = $1',
+      [product.product_id]
+    );
+    const inStockRes = await db.query(
+      'SELECT COUNT(*) as total FROM product_variants WHERE product_id = $1 AND stock_quantity > 0',
+      [product.product_id]
+    );
 
     res.json({
       ...product,
       size_stock: sizeStock,
-      product_total_stock: sizeStock.reduce((sum, s) => sum + s.total_stock, 0),
+      product_total_pieces: parseInt(totalPiecesRes.rows[0].total, 10),
+      product_in_stock: parseInt(inStockRes.rows[0].total, 10),
+      product_total_stock: parseInt(totalPiecesRes.rows[0].total, 10),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

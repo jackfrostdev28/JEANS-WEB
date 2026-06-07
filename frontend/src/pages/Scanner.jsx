@@ -239,14 +239,16 @@ const Scanner = () => {
                             {isScannedSize && ' (ที่สแกน)'}
                           </span>
                           <span className="scanner-size-qty">
-                            {item.total_stock}/{item.barcode_count} ชิ้นในสต๊อก
+                            {item.total_pieces ?? item.barcode_count} ชิ้น
+                            {(item.in_stock ?? item.total_stock) > 0 && ` (${item.in_stock ?? item.total_stock} ในสต๊อก)`}
                           </span>
                         </div>
                       );
                     })}
                   </div>
                   <p style={{ marginTop: '0.75rem', marginBottom: 0, fontWeight: 600, color: 'var(--primary-dark)' }}>
-                    รวมทั้งรุ่น: {productData.product_total_stock} ชิ้น
+                    รวมทั้งรุ่น: {productData.product_total_pieces ?? productData.product_total_stock} ชิ้น
+                    {productData.product_in_stock !== undefined && ` (${productData.product_in_stock} ในสต๊อก)`}
                   </p>
                 </div>
               )}
@@ -260,7 +262,7 @@ const Scanner = () => {
 
             {transactionSuccess ? (
               <div className="badge badge-success mt-4" style={{ display: 'block', padding: '1rem', textAlign: 'center', fontSize: '1.1rem' }}>
-                ทำรายการสำเร็จ! บาร์โค้ดนี้{Number(productData.stock_quantity) > 0 ? 'อยู่ในสต๊อก' : 'ว่างแล้ว'} · รวมทั้งรุ่น {productData.product_total_stock} ชิ้น
+                ทำรายการสำเร็จ! บาร์โค้ดนี้{Number(productData.stock_quantity) > 0 ? 'อยู่ในสต๊อก' : 'ว่างแล้ว'} · รวมทั้งรุ่น {productData.product_total_pieces ?? productData.product_total_stock} ชิ้น
               </div>
             ) : (
               <div style={{ marginTop: '2rem' }}>

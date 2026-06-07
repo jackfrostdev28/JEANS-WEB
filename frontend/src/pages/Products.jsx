@@ -33,9 +33,11 @@ const groupVariantsBySize = (variants) => {
 
 const getProductSummary = (variants) => {
   const groups = groupVariantsBySize(variants);
-  const totalStock = variants.filter(isInStock).length;
+  const totalPieces = variants.length;
+  const inStock = variants.filter(isInStock).length;
   return {
-    totalStock,
+    totalPieces,
+    inStock,
     sizeCount: groups.length,
     barcodeCount: variants.length,
     sizeGroups: groups,
@@ -210,7 +212,7 @@ const Products = () => {
     <div>
       <div className="inventory-header">
         <h1>สต๊อกสินค้าทั้งหมด</h1>
-        <p className="inventory-subtitle">1 บาร์โค้ด = 1 ชิ้น · รวมชิ้น = จำนวนบาร์โค้ดที่อยู่ในสต๊อก</p>
+        <p className="inventory-subtitle">1 บาร์โค้ด = 1 ชิ้น · รวมทั้งรุ่น = จำนวนบาร์โค้ดทั้งหมดในรุ่นนั้น</p>
       </div>
 
       {products.length === 0 ? (
@@ -240,13 +242,13 @@ const Products = () => {
                       <span>·</span>
                       <span>{summary.barcodeCount} บาร์โค้ด</span>
                       <span>·</span>
-                      <span>{summary.totalStock} ชิ้นในสต๊อก</span>
+                      <span>{summary.inStock} ชิ้นในสต๊อก</span>
                     </div>
                   </div>
 
                   <div className="inventory-card-total">
                     <span className="inventory-total-label">รวมทั้งรุ่น</span>
-                    <span className="inventory-total-value">{summary.totalStock}</span>
+                    <span className="inventory-total-value">{summary.totalPieces}</span>
                     <span className="inventory-total-unit">ชิ้น</span>
                   </div>
                 </div>
@@ -264,9 +266,9 @@ const Products = () => {
                           onClick={() => toggleSizeExpand(product.id, group.size)}
                         >
                           <span className="inventory-size-name">{group.size}</span>
-                          <span className="inventory-size-qty">{group.inStock}</span>
+                          <span className="inventory-size-qty">{group.variants.length}</span>
                           <span className="inventory-size-barcode-count">
-                            {group.inStock}/{group.variants.length} ชิ้น
+                            {group.inStock}/{group.variants.length} ในสต๊อก
                             {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                           </span>
                         </button>
