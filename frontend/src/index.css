@@ -87,6 +87,35 @@ h1, h2, h3, h4 {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
+.password-input-wrap {
+  position: relative;
+}
+
+.password-input-wrap .input-field {
+  padding-right: 2.75rem;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+.password-toggle-btn:hover {
+  color: var(--primary-color);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -754,6 +783,52 @@ h1, h2, h3, h4 {
   width: 100%;
   max-width: 400px;
   margin: 0 auto;
+}
+
+.scanner-camera-wrap {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  aspect-ratio: 4 / 3;
+  background: #0f172a;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.scanner-camera-video,
+.scanner-captured-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* iOS placeholder — แสดงแทน video preview บน iPhone */
+.scanner-ios-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: white;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.scanner-capture-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.scanner-capture-actions .btn {
+  flex: 1;
+  min-width: 140px;
 }
 
 .scanner-action-buttons {
