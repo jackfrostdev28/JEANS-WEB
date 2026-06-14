@@ -3,6 +3,15 @@ import api from './api';
 
 export const AuthContext = createContext();
 
+function isTokenValid(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -10,8 +19,11 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    if (token && storedUser) {
+    if (token && storedUser && isTokenValid(token)) {
       setUser(JSON.parse(storedUser));
+    } else if (token || storedUser) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
     }
     setLoading(false);
   }, []);

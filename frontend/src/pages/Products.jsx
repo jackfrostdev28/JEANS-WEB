@@ -1,9 +1,8 @@
-import React, { useContext, useEffect, useState } from 'react';
-import { Plus, ChevronDown, ChevronUp, Pencil, Trash2, Settings2 } from 'lucide-react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { Plus, ChevronDown, ChevronUp, Pencil, Trash2, Settings2, Search } from 'lucide-react';
 import api from '../api';
 import { AuthContext } from '../AuthContext';
-
-const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+import { SIZE_ORDER, SIZE_OPTIONS, getSizeSelectOptions } from '../constants/sizes';
 
 const isInStock = (variant) => Number(variant.stock_quantity) > 0;
 
@@ -44,17 +43,26 @@ const getProductSummary = (variants) => {
   };
 };
 
-const getImageUrl = (imageUrl) => {
-  if (!imageUrl) return null;
-  const base = import.meta.env.DEV ? 'http://localhost:5000' : 'https://jeans-api.onrender.com';
-  return `${base}${imageUrl}`;
-};
-
 const StockBadge = ({ inStock }) => (
   <span className={`stock-badge ${inStock ? 'stock-badge-in' : 'stock-badge-out'}`}>
     {inStock ? 'ในสต๊อก' : 'ว่าง'}
   </span>
 );
+
+const normalizeSearchQuery = (query) => query.trim().toLowerCase();
+
+const matchesProductSearch = (product, query) => {
+  const q = normalizeSearchQuery(query);
+  if (!q) return true;
+
+  if (product.serial.toLowerCase().includes(q)) return true;
+  if (product.name.toLowerCase().includes(q)) return true;
+
+  const priceQuery = q.replace(/[฿,\s]/g, '');
+  if (priceQuery && String(product.price).includes(priceQuery)) return true;
+
+  return product.variants?.some((v) => v.size.toLowerCase().includes(q)) ?? false;
+};
 
 const Products = () => {
   const { user } = useContext(AuthContext);
@@ -68,8 +76,18 @@ const Products = () => {
   const [variantError, setVariantError] = useState('');
   const [variantLoading, setVariantLoading] = useState(false);
   const [expandedSizes, setExpandedSizes] = useState({});
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [productForm, setProductForm] = useState({ serial: '', name: '', price: '' });
+  const [productError, setProductError] = useState('');
+  const [productLoading, setProductLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const isAdmin = user?.role === 'admin';
+
+  const filteredProducts = useMemo(
+    () => products.filter((product) => matchesProductSearch(product, searchQuery)),
+    [products, searchQuery],
+  );
 
   useEffect(() => {
     fetchProducts();
@@ -93,7 +111,7 @@ const Products = () => {
 
   const openAddVariantModal = (product) => {
     setSelectedProduct(product);
-    setVariantForm({ size: '', barcode: '' });
+    setVariantForm({ size: SIZE_OPTIONS[0], barcode: '' });
     setVariantError('');
   };
 
@@ -183,6 +201,73 @@ const Products = () => {
     }
   };
 
+  const openEditProductModal = (product) => {
+    setEditingProduct(product);
+    setProductForm({
+      serial: product.serial,
+      name: product.name,
+      price: String(product.price),
+    });
+    setProductError('');
+  };
+
+  const closeEditProductModal = () => {
+    setEditingProduct(null);
+    setProductForm({ serial: '', name: '', price: '' });
+    setProductError('');
+  };
+
+  const handleEditProduct = async (e) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+
+    const serial = productForm.serial.trim();
+    const name = productForm.name.trim();
+    const price = productForm.price.trim();
+
+    if (!serial || !name || !price) {
+      setProductError('กรุณากรอกข้อมูลรุ่นให้ครบถ้วน');
+      return;
+    }
+
+    setProductLoading(true);
+    setProductError('');
+
+    try {
+      await api.put(`/products/${editingProduct.id}`, {
+        serial,
+        name,
+        price: Number(price),
+      });
+      await fetchProducts();
+      closeEditProductModal();
+    } catch (err) {
+      setProductError(err.response?.data?.error || 'แก้ไขรุ่นไม่สำเร็จ');
+    } finally {
+      setProductLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = async (product) => {
+    const summary = getProductSummary(product.variants);
+    const message = `ลบรุ่น ${product.serial} (${product.name}) และบาร์โค้ดทั้งหมด ${summary.barcodeCount} รายการ?`;
+    if (!window.confirm(message)) return;
+
+    setProductLoading(true);
+
+    try {
+      await api.delete(`/products/${product.id}`);
+      await fetchProducts();
+      if (manageProduct?.id === product.id) closeManageModal();
+      if (selectedProduct?.id === product.id) closeAddVariantModal();
+      if (editingProduct?.id === product.id) closeEditProductModal();
+    } catch (err) {
+      alert(err.response?.data?.error || 'ลบรุ่นไม่สำเร็จ');
+    } finally {
+      setProductLoading(false);
+    }
+  };
+
   const handleDeleteVariant = async (variant) => {
     if (!window.confirm(`ลบบาร์โค้ด ${variant.barcode} ?`)) return;
 
@@ -213,26 +298,30 @@ const Products = () => {
       <div className="inventory-header">
         <h1>สต๊อกสินค้าทั้งหมด</h1>
         <p className="inventory-subtitle">1 บาร์โค้ด = 1 ชิ้น · รวมทั้งรุ่น = จำนวนบาร์โค้ดทั้งหมดในรุ่นนั้น</p>
+        <div className="inventory-search">
+          <Search size={18} className="inventory-search-icon" aria-hidden="true" />
+          <input
+            type="search"
+            className="input-field inventory-search-input"
+            placeholder="ค้นหารหัสรุ่น, ชื่อสินค้า, ราคา, ไซส์..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
       </div>
 
       {products.length === 0 ? (
         <div className="glass-panel inventory-empty">ไม่พบข้อมูลสินค้า</div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="glass-panel inventory-empty">ไม่พบสินค้าที่ตรงกับ &quot;{searchQuery.trim()}&quot;</div>
       ) : (
         <div className="inventory-list">
-          {products.map((product) => {
+          {filteredProducts.map((product) => {
             const summary = getProductSummary(product.variants);
 
             return (
               <div key={product.id} className="glass-panel inventory-card">
                 <div className="inventory-card-top">
-                  <div className="inventory-card-image">
-                    {product.image_url ? (
-                      <img src={getImageUrl(product.image_url)} alt={product.name} />
-                    ) : (
-                      <span>ไม่มีรูป</span>
-                    )}
-                  </div>
-
                   <div className="inventory-card-info">
                     <div className="inventory-card-serial">{product.serial}</div>
                     <div className="inventory-card-name">{product.name}</div>
@@ -290,17 +379,79 @@ const Products = () => {
 
                 {isAdmin && (
                   <div className="inventory-card-actions">
+                    <button type="button" className="btn btn-outline" onClick={() => openEditProductModal(product)}>
+                      <Pencil size={16} /> แก้ไขรุ่น
+                    </button>
+                    <button type="button" className="btn btn-outline btn-danger" onClick={() => handleDeleteProduct(product)} disabled={productLoading}>
+                      <Trash2 size={16} /> ลบรุ่น
+                    </button>
                     <button type="button" className="btn btn-outline" onClick={() => openAddVariantModal(product)}>
                       <Plus size={16} /> เพิ่มบาร์โค้ด
                     </button>
                     <button type="button" className="btn btn-outline" onClick={() => openManageModal(product)}>
-                      <Settings2 size={16} /> แก้ไข/ลบ
+                      <Settings2 size={16} /> แก้ไข/ลบบาร์โค้ด
                     </button>
                   </div>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {editingProduct && (
+        <div className="modal-overlay">
+          <div className="glass-panel modal-content" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2>แก้ไขรุ่น</h2>
+              <button type="button" className="btn btn-outline" onClick={closeEditProductModal}>ปิด</button>
+            </div>
+
+            {productError && (
+              <div className="badge badge-danger mb-4" style={{ display: 'block', padding: '1rem' }}>{productError}</div>
+            )}
+
+            <form onSubmit={handleEditProduct}>
+              <div className="input-group">
+                <label className="input-label">รหัสรุ่น (Serial)</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={productForm.serial}
+                  onChange={(e) => setProductForm({ ...productForm, serial: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">ชื่อสินค้า</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={productForm.name}
+                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">ราคา (บาท)</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  min="0"
+                  step="1"
+                  value={productForm.price}
+                  onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={productLoading}>
+                {productLoading ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
@@ -323,14 +474,16 @@ const Products = () => {
             <form onSubmit={handleAddVariant}>
               <div className="input-group">
                 <label className="input-label">ไซส์</label>
-                <input
-                  type="text"
+                <select
                   className="input-field"
-                  placeholder="เช่น XL, 32, 34"
                   value={variantForm.size}
                   onChange={(e) => setVariantForm({ ...variantForm, size: e.target.value })}
                   required
-                />
+                >
+                  {SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="input-group">
@@ -377,13 +530,16 @@ const Products = () => {
               <form onSubmit={handleEditVariant}>
                 <div className="input-group">
                   <label className="input-label">ไซส์</label>
-                  <input
-                    type="text"
+                  <select
                     className="input-field"
                     value={editForm.size}
                     onChange={(e) => setEditForm({ ...editForm, size: e.target.value })}
                     required
-                  />
+                  >
+                    {getSizeSelectOptions(editForm.size).map((size) => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="input-group">
                   <label className="input-label">บาร์โค้ด</label>

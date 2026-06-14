@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import api from '../api';
 import { AuthContext } from '../AuthContext';
 
@@ -14,6 +15,8 @@ const Users = () => {
   const [role, setRole] = useState('temporary');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showPasswords, setShowPasswords] = useState(true);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -66,6 +69,20 @@ const Users = () => {
                 <tr>
                   <th>ชื่อผู้ใช้งาน (Username)</th>
                   <th>ชื่อ-นามสกุล</th>
+                  <th>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                      รหัสผ่าน
+                      <button
+                        type="button"
+                        className="password-toggle-btn"
+                        style={{ position: 'static', transform: 'none', padding: '0.25rem' }}
+                        onClick={() => setShowPasswords((prev) => !prev)}
+                        aria-label={showPasswords ? 'ซ่อนรหัสผ่านทั้งหมด' : 'แสดงรหัสผ่านทั้งหมด'}
+                      >
+                        {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </span>
+                  </th>
                   <th>ระดับสิทธิ์ (Role)</th>
                 </tr>
               </thead>
@@ -74,6 +91,11 @@ const Users = () => {
                   <tr key={u.id}>
                     <td>{u.username}</td>
                     <td>{u.name}</td>
+                    <td>
+                      {u.plain_password
+                        ? (showPasswords ? u.plain_password : '••••••••')
+                        : '—'}
+                    </td>
                     <td>
                       {u.role === 'admin' ? (
                         <span className="badge badge-success">ผู้ขายประจำ (Admin)</span>
@@ -109,13 +131,23 @@ const Users = () => {
             
             <div className="input-group">
               <label className="input-label">รหัสผ่าน</label>
-              <input 
-                type="password" 
-                className="input-field" 
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-              />
+              <div className="password-input-wrap">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  className="input-field"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowNewPassword((prev) => !prev)}
+                  aria-label={showNewPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+                >
+                  {showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
 
             <div className="input-group">

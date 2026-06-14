@@ -1,10 +1,12 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -44,13 +46,23 @@ const Login = () => {
           
           <div className="input-group">
             <label className="input-label">รหัสผ่าน</label>
-            <input 
-              type="password" 
-              className="input-field" 
-              value={password} 
-              onChange={e => setPassword(e.target.value)} 
-              required 
-            />
+            <div className="password-input-wrap">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="input-field"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
           </div>
           
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>

@@ -400,6 +400,26 @@ h1, h2, h3, h4 {
   margin-top: 0.35rem;
 }
 
+.inventory-search {
+  position: relative;
+  margin-top: 1rem;
+  max-width: 28rem;
+}
+
+.inventory-search-icon {
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.inventory-search-input {
+  width: 100%;
+  padding-left: 2.5rem;
+}
+
 .inventory-list {
   display: flex;
   flex-direction: column;
@@ -882,6 +902,40 @@ th {
 
 tr:hover {
   background: rgba(241, 245, 249, 0.5);
+}
+
+.pagination-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.pagination-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pagination-page-label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  min-width: 5.5rem;
+  text-align: center;
+}
+
+.pagination-bar .btn {
+  padding: 0.5rem 0.75rem;
+  min-width: 2.5rem;
+}
+
+.pagination-bar .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Badges */

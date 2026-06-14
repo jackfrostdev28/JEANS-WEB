@@ -22,9 +22,14 @@ async function initializeDatabase() {
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
+        plain_password VARCHAR(255),
         name VARCHAR(255),
         role VARCHAR(50) NOT NULL DEFAULT 'temporary'
       )
+    `);
+
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password VARCHAR(255)
     `);
 
     // 2. Products Table
@@ -69,9 +74,16 @@ async function initializeDatabase() {
     const res = await pool.query("SELECT id FROM users WHERE username = $1", ["admin"]);
     if (res.rows.length === 0) {
       const hash = bcrypt.hashSync("admin123", 8);
-      await pool.query("INSERT INTO users (username, password, name, role) VALUES ($1, $2, $3, $4)", ["admin", hash, "Administrator", "admin"]);
+      await pool.query(
+        "INSERT INTO users (username, password, plain_password, name, role) VALUES ($1, $2, $3, $4, $5)",
+        ["admin", hash, "admin123", "Administrator", "admin"]
+      );
       console.log("Admin user created in PostgreSQL (username: admin, password: admin123)");
     } else {
+      await pool.query(
+        "UPDATE users SET plain_password = $1 WHERE username = $2 AND plain_password IS NULL",
+        ["admin123", "admin"]
+      );
       console.log("Connected to PostgreSQL successfully.");
     }
   } catch (err) {
@@ -84,4 +96,5 @@ initializeDatabase();
 
 module.exports = {
   query: (text, params) => pool.query(text, params),
+  getClient: () => pool.connect(),
 };

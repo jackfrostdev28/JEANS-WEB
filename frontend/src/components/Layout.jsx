@@ -21,9 +21,9 @@ const Layout = () => {
 
   const navItems = [
     { path: '/', label: 'แดชบอร์ด', icon: LayoutDashboard, adminOnly: false },
-    { path: '/pos', label: 'สแกนสินค้า', icon: ScanBarcode, adminOnly: false },
+    { path: '/pos', label: 'ถ่ายภาพสินค้า', icon: ScanBarcode, adminOnly: false },
     { path: '/inventory', label: 'สต๊อกสินค้าทั้งหมด', icon: PackageSearch, adminOnly: false },
-    { path: '/inventory/add', label: 'เพิ่มสินค้าใหม่', icon: PackagePlus, adminOnly: true },
+    { path: '/inventory/add', label: 'รับสินค้าเข้าสต๊อก', icon: PackagePlus, adminOnly: true },
     { path: '/reports', label: 'ประวัติการเคลื่อนไหว', icon: History, adminOnly: false },
     { path: '/users', label: 'จัดการผู้ใช้งาน', icon: Users, adminOnly: true },
   ];

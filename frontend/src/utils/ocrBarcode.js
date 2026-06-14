@@ -10,6 +10,7 @@
  */
 
 import { createWorker, PSM } from 'tesseract.js';
+import api from '../api';
 import {
   MultiFormatReader,
   BarcodeFormat,
@@ -419,75 +420,21 @@ function buildVariants(base) {
   return variants;
 }
 
-// ─── Main Export ──────────────────────────────────────────────────────────────
-/**
- * อ่านบาร์โค้ดจาก dataURL
- * รองรับ: Android Chrome, iPhone iOS Safari, Desktop
- *
- * @returns {{ candidates: string[], serialCandidates: string[], size: string|null }}
- */
-export async function recognizeBarcodesFromImage(imageSrc) {
-  // ── Step 0: แก้ EXIF rotation ก่อนเสมอ (สำคัญสำหรับ iPhone) ─────────────────
-  const correctedSrc = await fixExifOrientation(imageSrc);
-  const img = await loadImage(correctedSrc);
-  const raw = toCanvas(img);
-  const base = upscale(raw);
-
-  // ประมวลผลภาพหลายแบบ — รวมถึงลดแสงสะท้อนสำหรับป้ายพลาสติก
-  const preprocessed = [
-    base,
-    reduceGlare(clone(base)),
-    yellowToBinary(clone(base)),
-    enhanceForOcr(clone(base)),
-  ];
-
-  const variants = [];
-  for (const pre of preprocessed) {
-    variants.push(...buildVariants(pre));
+async function fetchPythonBarcodes(imageSrc) {
+  try {
+    const { data } = await api.post('/scan/decode-image', { image: imageSrc });
+    return Array.isArray(data?.candidates)
+      ? data.candidates.map((value) => String(value).trim()).filter(Boolean)
+      : [];
+  } catch {
+    return [];
   }
+}
 
-  const barcodeSet = new Set();
+async function extractSerialAndSize(base) {
   const serialSet = new Set();
   let detectedSize = null;
 
-  const addBarcodes = (arr) => arr.forEach((v) => { if (v) barcodeSet.add(String(v).trim()); });
-
-  // ── รอบที่ 1: Barcode scanner (BarcodeDetector + ZXing) ──────────────────────
-  // หมายเหตุ: BarcodeDetector ไม่มีบน iOS แต่ ZXing ทำงานได้ทุกที่
-  for (const canvas of variants) {
-    addBarcodes(await tryNativeDetector(canvas)); // Android Chrome / Desktop
-    addBarcodes(tryZxing(canvas));               // ทุกแพลตฟอร์มรวม iOS
-
-    if ([...barcodeSet].some(isValidEan13)) break;
-  }
-
-  if ([...barcodeSet].some(isValidEan13)) {
-    const sorted = [...barcodeSet].sort((a, b) => scoreBarcode(b) - scoreBarcode(a));
-    return { candidates: sorted, serialCandidates: [], size: null };
-  }
-
-  // ── รอบที่ 2: OCR ตัวเลขใต้บาร์โค้ด ──────────────────────────────────────────
-  const ocrTargets = [
-    base,
-    reduceGlare(clone(base)),
-    yellowToBinary(clone(base)),
-    enhanceForOcr(clone(base)),
-    crop(base, 0, 0.4, 1, 0.45),
-    crop(base, 0, 0.5, 1, 0.5),
-  ];
-
-  for (const c of ocrTargets) {
-    const nums = await ocrDigits(c);
-    nums.forEach((n) => barcodeSet.add(n));
-    if ([...barcodeSet].some(isValidEan13)) break;
-  }
-
-  if ([...barcodeSet].some(isValidEan13)) {
-    const sorted = [...barcodeSet].sort((a, b) => scoreBarcode(b) - scoreBarcode(a));
-    return { candidates: sorted, serialCandidates: [], size: null };
-  }
-
-  // ── รอบที่ 3: OCR ข้อความเต็ม → Serial + Size (สำรองสุดท้าย) ──────────────────
   const textTargets = [
     base,
     yellowToBinary(clone(base)),
@@ -501,15 +448,87 @@ export async function recognizeBarcodesFromImage(imageSrc) {
     const { serial, size } = parseSerialAndSize(text);
     if (serial) serialSet.add(serial);
     if (size && !detectedSize) detectedSize = size;
+  }
 
-    // ดึงตัวเลขจาก full-text ด้วย
-    extractBarcodeCandidates(text).forEach((n) => barcodeSet.add(n));
+  return { serialCandidates: [...serialSet], size: detectedSize };
+}
+
+// ─── Main Export ──────────────────────────────────────────────────────────────
+/**
+ * อ่านบาร์โค้ดจาก dataURL
+ * รองรับ: Android Chrome, iPhone iOS Safari, Desktop
+ *
+ * @returns {{ candidates: string[], serialCandidates: string[], size: string|null }}
+ */
+export async function recognizeBarcodesFromImage(imageSrc) {
+  const correctedSrc = await fixExifOrientation(imageSrc);
+  const img = await loadImage(correctedSrc);
+  const raw = toCanvas(img);
+  const base = upscale(raw);
+
+  const barcodeSet = new Set();
+  const addBarcodes = (arr) => arr.forEach((v) => { if (v) barcodeSet.add(String(v).trim()); });
+
+  addBarcodes(await fetchPythonBarcodes(imageSrc));
+
+  const hasValidEan = () => [...barcodeSet].some(isValidEan13);
+
+  if (!hasValidEan()) {
+    const preprocessed = [
+      base,
+      reduceGlare(clone(base)),
+      yellowToBinary(clone(base)),
+      enhanceForOcr(clone(base)),
+    ];
+
+    const scanVariants = [];
+    for (const pre of preprocessed) {
+      scanVariants.push(...buildVariants(pre));
+    }
+
+    for (const canvas of scanVariants) {
+      addBarcodes(await tryNativeDetector(canvas));
+      addBarcodes(tryZxing(canvas));
+      if (hasValidEan()) break;
+    }
+  }
+
+  if (!hasValidEan()) {
+    const ocrTargets = [
+      base,
+      reduceGlare(clone(base)),
+      yellowToBinary(clone(base)),
+      enhanceForOcr(clone(base)),
+      crop(base, 0, 0.4, 1, 0.45),
+      crop(base, 0, 0.5, 1, 0.5),
+    ];
+
+    for (const c of ocrTargets) {
+      const nums = await ocrDigits(c);
+      nums.forEach((n) => barcodeSet.add(n));
+      if (hasValidEan()) break;
+    }
+  }
+
+  const { serialCandidates, size } = await extractSerialAndSize(base);
+
+  if (!hasValidEan()) {
+    const textTargets = [
+      base,
+      yellowToBinary(clone(base)),
+      reduceGlare(clone(base)),
+      crop(base, 0, 0, 1, 0.65),
+    ];
+    for (const c of textTargets) {
+      const text = await ocrFullText(c);
+      extractBarcodeCandidates(text).forEach((n) => barcodeSet.add(n));
+    }
   }
 
   const sortedBarcodes = [...barcodeSet].sort((a, b) => scoreBarcode(b) - scoreBarcode(a));
   return {
     candidates: sortedBarcodes,
-    serialCandidates: [...serialSet],
-    size: detectedSize,
+    serialCandidates,
+    size,
   };
 }
